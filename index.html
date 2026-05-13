@@ -150,9 +150,27 @@
         .planet-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 10px; }
         .planet-name { font-family: 'Orbitron', sans-serif; font-size: 1.15rem; font-weight: bold; color: #fff; }
         .bucket-list { display: flex; flex-direction: column; gap: 8px; }
-        .bucket-item { display: flex; justify-content: space-between; font-size: 0.95rem; }
-        .tlm-value { font-family: 'Orbitron', sans-serif; color: var(--neon-purple); }
-        .tlm-value.high { color: var(--neon-green); font-weight: bold; }
+        .bucket-item { display: flex; justify-content: space-between; font-size: 0.95rem; align-items: center; padding: 2px 0; }
+        .tlm-value { font-family: 'Orbitron', sans-serif; font-weight: bold; font-size: 1rem; }
+        
+        /* สีกำหนดเองตามระดับความหายาก */
+        .tlm-Abundant { color: #888; opacity: 0.8; }
+        .tlm-Common { color: #ffffff; text-shadow: 0 0 5px rgba(255,255,255,0.2); }
+        .tlm-Rare { color: #00d2ff; text-shadow: 0 0 8px rgba(0, 210, 255, 0.4); }
+        .tlm-Epic { color: #bf55ec; text-shadow: 0 0 10px rgba(191, 85, 236, 0.4); }
+        .tlm-Legendary { color: #f1c40f; text-shadow: 0 0 12px rgba(241, 196, 15, 0.5); }
+        .tlm-Mythic { color: #e74c3c; text-shadow: 0 0 15px rgba(231, 76, 60, 0.6); }
+
+        /* เอฟเฟกต์เมื่อค่าสูง (แร่เยอะ) */
+        .tlm-value.high-yield {
+            animation: glow-pulse 2s infinite;
+        }
+
+        @keyframes glow-pulse {
+            0% { filter: brightness(1); }
+            50% { filter: brightness(1.4); transform: scale(1.05); }
+            100% { filter: brightness(1); }
+        }
 
         .table-container {
             background: var(--glass-bg);
@@ -276,7 +294,12 @@
                     const data = await res.json();
                     if(data.rows && data.rows.length > 0) {
                         const buckets = {};
-                        data.rows[0].pool_buckets.forEach(b => buckets[b.key] = parseFloat(b.value));
+                        data.rows[0].pool_buckets.forEach(b => {
+                            let key = b.key;
+                            // แก้ไข: รองรับทั้งคำว่า Mythic และ Mythical เพื่อความแม่นยำ
+                            if (key === "Mythical") key = "Mythic";
+                            buckets[key] = parseFloat(b.value);
+                        });
                         POOL_DATA[p] = buckets;
                     }
                 }
@@ -353,7 +376,15 @@
                 let bucketsHtml = '';
                 RARITIES.forEach(rarity => {
                     const val = (POOL_DATA[planet] && POOL_DATA[planet][rarity]) || 0;
-                    bucketsHtml += `<div class="bucket-item"><span>${rarity}</span><span class="tlm-value ${val >= 5 ? 'high' : ''}">${val.toFixed(4)}</span></div>`;
+                    // เพิ่มคลาสตามชื่อ Rarity เช่น tlm-Rare, tlm-Legendary
+                    const rarityClass = `tlm-${rarity}`;
+                    const highYieldClass = val >= 5 ? 'high-yield' : '';
+                    
+                    bucketsHtml += `
+                        <div class="bucket-item">
+                            <span>${rarity}</span>
+                            <span class="tlm-value ${rarityClass} ${highYieldClass}">${val.toFixed(4)}</span>
+                        </div>`;
                 });
                 html += `<div class="planet-card ${isBest ? 'best' : ''}"><div class="planet-header"><div class="planet-name">${shortName}</div>${isBest ? '<i class="fas fa-crown" style="color: var(--neon-green);"></i>' : ''}</div><div class="bucket-list">${bucketsHtml}</div></div>`;
             });
