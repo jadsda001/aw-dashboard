@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alien Worlds | Serverless Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@300;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-deep: #040510;
+            --neon-blue: #00d2ff;
+            --neon-purple: #9d50bb;
+            --neon-green: #39ff14;
+            --glass-bg: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.08);
+        }
+
+        body {
+            background-color: var(--bg-deep);
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(157, 80, 187, 0.12) 0%, transparent 45%),
+                radial-gradient(circle at 90% 80%, rgba(0, 210, 255, 0.12) 0%, transparent 45%);
+            color: #e0e0e0;
+            font-family: 'Rajdhani', sans-serif;
+            margin: 0;
+            padding: 15px 25px;
+            min-height: 100vh;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 25px;
+            margin-bottom: 25px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border-radius: 15px;
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            margin: 0;
+            font-family: 'Orbitron', sans-serif;
+            background: linear-gradient(90deg, var(--neon-blue), var(--neon-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 1.6rem;
+            letter-spacing: 1px;
+        }
+
+        .update-info {
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        #last-update-time {
+            color: var(--neon-blue);
+            font-weight: bold;
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        .section-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.25rem;
+            margin: 30px 0 15px 5px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            color: var(--neon-blue);
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .search-box {
+            position: relative;
+            width: 300px;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 8px 15px 8px 35px;
+            background: rgba(0,0,0,0.4);
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            color: #fff;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 1rem;
+            outline: none;
+            transition: 0.3s;
+            box-sizing: border-box;
+        }
+
+        .search-box i {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #888;
+        }
+
+        .badge {
+            background: rgba(157, 80, 187, 0.2);
+            border: 1px solid var(--neon-purple);
+            color: #fff;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        .badge.syncing {
+            background: rgba(241, 196, 15, 0.2);
+            border-color: #f1c40f;
+            color: #f1c40f;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .planet-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 15px;
+            padding: 15px;
+            transition: 0.3s;
+        }
+
+        .planet-card.best { border-color: var(--neon-green); box-shadow: 0 0 20px rgba(57, 255, 20, 0.15); }
+        .planet-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 10px; }
+        .planet-name { font-family: 'Orbitron', sans-serif; font-size: 1.15rem; font-weight: bold; color: #fff; }
+        .bucket-list { display: flex; flex-direction: column; gap: 8px; }
+        .bucket-item { display: flex; justify-content: space-between; font-size: 0.95rem; }
+        .tlm-value { font-family: 'Orbitron', sans-serif; color: var(--neon-purple); }
+        .tlm-value.high { color: var(--neon-green); font-weight: bold; }
+
+        .table-container {
+            background: var(--glass-bg);
+            backdrop-filter: blur(15px);
+            border: 1px solid var(--glass-border);
+            border-radius: 15px;
+            overflow-x: auto;
+            max-height: 600px;
+        }
+
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        thead { position: sticky; top: 0; background: #07091d; z-index: 10; }
+        th { text-align: left; padding: 14px 12px; border-bottom: 1px solid var(--glass-border); font-family: 'Orbitron', sans-serif; color: #aaa; font-size: 0.75rem; text-transform: uppercase; }
+        td { padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.02); color: #ccc; }
+        tr:hover td { background: rgba(255,255,255,0.04); color: #fff; }
+
+        .rarity-Abundant { color: #888; }
+        .rarity-Common { color: #fff; }
+        .rarity-Rare { color: #00d2ff; }
+        .rarity-Epic { color: #9d50bb; }
+        .rarity-Legendary { color: #f1c40f; }
+        .rarity-Mythic { color: #e74c3c; }
+
+        .val-mining { color: var(--neon-blue); font-weight: bold; }
+        .val-comms { color: var(--neon-purple); font-weight: bold; }
+        .val-id { color: #666; font-size: 0.8rem; font-family: 'Orbitron', sans-serif; }
+        .val-owner { color: var(--neon-blue); opacity: 0.8; }
+        .empty-row { text-align: center; padding: 30px !important; color: #888; font-style: italic; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1><i class="fas fa-satellite-dish"></i> ALIEN WORLDS HUB (VERCEL)</h1>
+        <div class="update-info">
+            <i class="fas fa-bolt" style="color: var(--neon-green);"></i> POOL SYNC: <span id="last-update-time">--:--:--</span>
+        </div>
+    </div>
+
+    <div class="section-title">
+        <div><i class="fas fa-chart-line"></i> REAL-TIME POOLS (0.5s)</div>
+    </div>
+    <div class="grid-container" id="planet-grid"></div>
+
+    <div class="section-title">
+        <div>
+            <i class="fas fa-globe"></i> FULL LAND DATABASE
+            <span id="land-status-badge" class="badge">Waiting...</span>
+        </div>
+        <div class="toolbar">
+            <div class="search-box">
+                <i class="fas fa-search"></i>
+                <input type="text" id="land-search" placeholder="ค้นหา Planet, Rarity, Owner, ชื่อที่ดิน..." onkeyup="renderLands()">
+            </div>
+        </div>
+    </div>
+    
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th onclick="setSort('index')" style="cursor:pointer"># <i class="fas fa-sort"></i></th>
+                    <th onclick="setSort('planet')" style="cursor:pointer">Planet <i class="fas fa-sort"></i></th>
+                    <th onclick="setSort('rarity')" style="cursor:pointer">Rarity <i class="fas fa-sort"></i></th>
+                    <th onclick="setSort('name')" style="cursor:pointer">Name <i class="fas fa-sort"></i></th>
+                    <th onclick="setSort('charge')" style="cursor:pointer">Charge <i class="fas fa-sort"></i></th>
+                    <th onclick="setSort('mining')" style="cursor:pointer">Mining <i class="fas fa-sort"></i></th>
+                    <th onclick="setSort('pow')" style="cursor:pointer">POW <i class="fas fa-sort"></i></th>
+                    <th onclick="setSort('nft')" style="cursor:pointer">NFT <i class="fas fa-sort"></i></th>
+                    <th onclick="setSort('comms')" style="cursor:pointer">Comms. <i class="fas fa-sort"></i></th>
+                    <th onclick="setSort('x')" style="cursor:pointer">X <i class="fas fa-sort"></i></th>
+                    <th onclick="setSort('y')" style="cursor:pointer">Y <i class="fas fa-sort"></i></th>
+                    <th onclick="setSort('owner')" style="cursor:pointer">Owner <i class="fas fa-sort"></i></th>
+                    <th onclick="setSort('id')" style="cursor:pointer">LandID <i class="fas fa-sort"></i></th>
+                </tr>
+            </thead>
+            <tbody id="land-table-body">
+                <tr><td colspan="13" class="empty-row">กำลังเริ่มต้นซิงค์ข้อมูลจากบล็อกเชนโดยตรง...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        const RPC_ENDPOINTS = [
+            'https://wax.greymass.com',
+            'https://api.wax.alohaeos.com',
+            'https://wax.eosphere.io',
+            'https://api.wax.bountyblok.io'
+        ];
+        let currentRpc = 0;
+
+        const AA_ENDPOINTS = [
+            'https://wax.api.atomicassets.io',
+            'https://aa.wax.blacklusion.io',
+            'https://atomic.wax.eosrio.io'
+        ];
+        let currentAa = 0;
+
+        const PLANETS = ["naron.world", "magor.world", "veles.world", "kavian.world", "neri.world", "eyeke.world"];
+        const RARITIES = ["Abundant", "Common", "Rare", "Epic", "Legendary", "Mythic"];
+        const RARITY_ORDER = {"Abundant":1, "Common":2, "Rare":3, "Epic":4, "Legendary":5, "Mythic":6};
+
+        let ALL_LANDS = [];
+        let POOL_DATA = {};
+        let sortKey = 'name';
+        let sortDir = 1;
+        let isSyncing = false;
+
+        function getRpc() { return RPC_ENDPOINTS[currentRpc]; }
+        function switchRpc() { currentRpc = (currentRpc + 1) % RPC_ENDPOINTS.length; }
+        function getAa() { return AA_ENDPOINTS[currentAa]; }
+        function switchAa() { currentAa = (currentAa + 1) % AA_ENDPOINTS.length; }
+
+        async function fetchPools() {
+            try {
+                for(let p of PLANETS) {
+                    const res = await fetch(`${getRpc()}/v1/chain/get_table_rows`, {
+                        method: 'POST',
+                        body: JSON.stringify({json:true, code:"m.federation", scope:p, table:"pools", limit:1})
+                    });
+                    const data = await res.json();
+                    if(data.rows && data.rows.length > 0) {
+                        const buckets = {};
+                        data.rows[0].pool_buckets.forEach(b => buckets[b.key] = parseFloat(b.value));
+                        POOL_DATA[p] = buckets;
+                    }
+                }
+                document.getElementById('last-update-time').innerText = new Date().toLocaleTimeString();
+                renderPools();
+            } catch(e) { switchRpc(); }
+            setTimeout(fetchPools, 1000);
+        }
+
+        async function syncAllLands() {
+            if(isSyncing) return;
+            isSyncing = true;
+            ALL_LANDS = [];
+            let page = 1;
+            const badge = document.getElementById('land-status-badge');
+            
+            while(true) {
+                try {
+                    badge.className = "badge syncing";
+                    badge.innerText = `Syncing Page ${page}... (${ALL_LANDS.length} Lands)`;
+                    
+                    const res = await fetch(`${getAa()}/atomicassets/v1/assets?collection_name=alien.worlds&schema_name=land.worlds&limit=100&page=${page}&order=desc&sort=created`);
+                    const data = await res.json();
+                    
+                    if(!data.success || !data.data || data.data.length === 0) break;
+                    
+                    data.data.forEach(asset => {
+                        const idata = asset.immutable_data || {};
+                        const mdata = asset.mutable_data || {};
+                        const template = asset.template || {};
+                        const t_idata = template.immutable_data || {};
+                        
+                        const name = asset.name || "Unknown";
+                        let planet = "N/A";
+                        ["Naron", "Magor", "Veles", "Kavian", "Neri", "Eyeke"].forEach(p => {
+                            if(name.toLowerCase().includes(p.toLowerCase())) planet = p;
+                        });
+
+                        ALL_LANDS.push({
+                            id: asset.asset_id,
+                            owner: asset.owner,
+                            planet: planet,
+                            rarity: template.rarity || "Common",
+                            name: name,
+                            charge: (t_idata.delay || 20) / 10,
+                            mining: (t_idata.ease || 16) / 10,
+                            pow: t_idata.difficulty || 0,
+                            nft: (t_idata.luck || 19) / 10,
+                            comms: (mdata.commission || 2000) / 100,
+                            x: idata.x || 0,
+                            y: idata.y || 0
+                        });
+                    });
+                    
+                    renderLands();
+                    page++;
+                    await new Promise(r => setTimeout(r, 200));
+                } catch(e) { switchAa(); await new Promise(r => setTimeout(r, 1000)); }
+            }
+            isSyncing = false;
+            badge.className = "badge";
+            badge.innerText = `${ALL_LANDS.length.toLocaleString()} Lands Loaded`;
+        }
+
+        function renderPools() {
+            const grid = document.getElementById('planet-grid');
+            let bestPlanet = ''; let maxVal = -1;
+            PLANETS.forEach(p => { if (POOL_DATA[p] && POOL_DATA[p]["Common"] > maxVal) { maxVal = POOL_DATA[p]["Common"]; bestPlanet = p; } });
+
+            let html = '';
+            PLANETS.forEach(planet => {
+                const isBest = planet === bestPlanet;
+                const shortName = planet.split('.')[0].toUpperCase();
+                let bucketsHtml = '';
+                RARITIES.forEach(rarity => {
+                    const val = (POOL_DATA[planet] && POOL_DATA[planet][rarity]) || 0;
+                    bucketsHtml += `<div class="bucket-item"><span>${rarity}</span><span class="tlm-value ${val >= 5 ? 'high' : ''}">${val.toFixed(4)}</span></div>`;
+                });
+                html += `<div class="planet-card ${isBest ? 'best' : ''}"><div class="planet-header"><div class="planet-name">${shortName}</div>${isBest ? '<i class="fas fa-crown" style="color: var(--neon-green);"></i>' : ''}</div><div class="bucket-list">${bucketsHtml}</div></div>`;
+            });
+            grid.innerHTML = html;
+        }
+
+        function setSort(key) {
+            if (sortKey === key) sortDir *= -1;
+            else { sortKey = key; sortDir = 1; }
+            renderLands();
+        }
+
+        function renderLands() {
+            const query = document.getElementById('land-search').value.toLowerCase().trim();
+            const tbody = document.getElementById('land-table-body');
+            
+            let filtered = ALL_LANDS.filter(land => 
+                land.planet.toLowerCase().includes(query) || land.rarity.toLowerCase().includes(query) || 
+                land.name.toLowerCase().includes(query) || land.owner.toLowerCase().includes(query) || land.id.includes(query)
+            );
+
+            filtered.sort((a, b) => {
+                let vA = a[sortKey]; let vB = b[sortKey];
+                if (sortKey === 'rarity') { vA = RARITY_ORDER[a.rarity]; vB = RARITY_ORDER[b.rarity]; }
+                return (typeof vA === 'string' ? vA.localeCompare(vB) : vA - vB) * sortDir;
+            });
+
+            const limit = 200;
+            let html = filtered.slice(0, limit).map((l, i) => `
+                <tr>
+                    <td>${i + 1}</td><td>${l.planet}</td><td class="rarity-${l.rarity}"><strong>${l.rarity}</strong></td>
+                    <td>${l.name}</td><td>${l.charge}</td><td class="val-mining">${l.mining}</td>
+                    <td>${l.pow}</td><td>${l.nft}</td><td class="val-comms">${l.comms}%</td>
+                    <td>${l.x}</td><td>${l.y}</td><td class="val-owner">${l.owner}</td><td class="val-id">${l.id}</td>
+                </tr>
+            `).join('');
+
+            if(filtered.length > limit) html += `<tr><td colspan="13" class="empty-row">แสดง ${limit} จาก ${filtered.length.toLocaleString()} รายการ</td></tr>`;
+            tbody.innerHTML = html || '<tr><td colspan="13" class="empty-row">ไม่พบข้อมูล...</td></tr>';
+        }
+
+        fetchPools();
+        syncAllLands();
+    </script>
+</body>
+</html>
