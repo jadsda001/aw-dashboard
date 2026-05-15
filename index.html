@@ -172,6 +172,24 @@
             100% { filter: brightness(1); }
         }
 
+        /* ส่วนสถิติใหม่ */
+        .stats-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        .stats-card {
+            background: rgba(157, 80, 187, 0.05);
+            border: 1px solid rgba(157, 80, 187, 0.2);
+            border-radius: 12px;
+            padding: 12px;
+            text-align: center;
+        }
+        .stats-label { font-size: 0.8rem; color: #aaa; margin-bottom: 5px; }
+        .stats-value { font-family: 'Orbitron', sans-serif; font-size: 1.1rem; color: var(--neon-blue); }
+        .stats-trend { font-size: 0.75rem; margin-top: 5px; color: var(--neon-green); }
+
         .table-container {
             background: var(--glass-bg);
             backdrop-filter: blur(15px);
@@ -211,7 +229,15 @@
     </div>
 
     <div class="section-title">
-        <div><i class="fas fa-chart-line"></i> REAL-TIME POOLS (0.5s)</div>
+        <div><i class="fas fa-brain"></i> INTELLIGENCE TRENDS (3H AVG)</div>
+        <span class="badge" id="history-count">0 Data Points</span>
+    </div>
+    <div class="stats-container" id="intelligence-grid">
+        <div class="stats-card"><div class="stats-label">รอข้อมูล...</div></div>
+    </div>
+
+    <div class="section-title">
+        <div><i class="fas fa-chart-line"></i> REAL-TIME POOLS (1.0s)</div>
     </div>
     <div class="grid-container" id="planet-grid"></div>
 
@@ -278,6 +304,69 @@
         let sortKey = 'name';
         let sortDir = 1;
         let isSyncing = false;
+        
+        // ระบบบันทึกประวัติ (History Logic)
+        let HISTORY = JSON.parse(localStorage.getItem('aw_mining_history_v2') || '[]');
+
+        function saveHistory() {
+            if (Object.keys(POOL_DATA).length < 6) return;
+            const now = Date.now();
+            // ปรับใหม่: บันทึกทุกๆ 1 นาที (60,000 ms) เพื่อให้เห็นเทรนด์ไวขึ้น
+            if (HISTORY.length > 0 && (now - HISTORY[HISTORY.length-1].t) < 60000) return;
+            
+            HISTORY.push({ t: now, p: JSON.parse(JSON.stringify(POOL_DATA)) });
+            if (HISTORY.length > 300) HISTORY.shift(); // เก็บไว้ประมาณ 5 ชม. (ที่ความถี่ 1 นาที)
+            localStorage.setItem('aw_mining_history_v2', JSON.stringify(HISTORY));
+            document.getElementById('history-count').innerText = `${HISTORY.length} Data Points`;
+            renderIntelligence();
+        }
+
+        function renderIntelligence() {
+            if (HISTORY.length < 2) {
+                document.getElementById('intelligence-grid').innerHTML = '<div class="stats-card"><div class="stats-label">กำลังสะสมข้อมูล... (กรุณารอ 1-2 นาที)</div></div>';
+                return;
+            }
+            const now = Date.now();
+            const threeHoursAgo = now - (3 * 3600 * 1000);
+            const recentHistory = HISTORY.filter(h => h.t >= threeHoursAgo);
+            
+            if (recentHistory.length < 1) return;
+
+            const averages = {}; // { rarity: { planet: sum } }
+            RARITIES.forEach(r => {
+                averages[r] = {};
+                PLANETS.forEach(p => averages[r][p] = 0);
+            });
+
+            recentHistory.forEach(h => {
+                PLANETS.forEach(p => {
+                    RARITIES.forEach(r => {
+                        if (h.p[p] && h.p[p][r]) averages[r][p] += h.p[p][r];
+                    });
+                });
+            });
+
+            let html = '';
+            RARITIES.forEach(r => {
+                let bestPlanet = '';
+                let maxAvg = -1;
+                PLANETS.forEach(p => {
+                    const avg = averages[r][p] / recentHistory.length;
+                    if (avg > maxAvg) { maxAvg = avg; bestPlanet = p; }
+                });
+
+                if (bestPlanet) {
+                    const shortName = bestPlanet.split('.')[0].toUpperCase();
+                    html += `
+                        <div class="stats-card">
+                            <div class="stats-label">${r} BEST</div>
+                            <div class="stats-value">${shortName}</div>
+                            <div class="stats-trend"><i class="fas fa-arrow-up"></i> AVG: ${maxAvg.toFixed(4)}</div>
+                        </div>`;
+                }
+            });
+            document.getElementById('intelligence-grid').innerHTML = html;
+        }
 
         function getRpc() { return RPC_ENDPOINTS[currentRpc]; }
         function switchRpc() { currentRpc = (currentRpc + 1) % RPC_ENDPOINTS.length; }
@@ -305,6 +394,7 @@
                 }
                 document.getElementById('last-update-time').innerText = new Date().toLocaleTimeString();
                 renderPools();
+                saveHistory();
             } catch(e) { switchRpc(); }
             setTimeout(fetchPools, 1000);
         }
@@ -397,6 +487,13 @@
             renderLands();
         }
 
+        let displayLimit = 200;
+
+        function showAll() {
+            displayLimit = ALL_LANDS.length + 100;
+            renderLands();
+        }
+
         function renderLands() {
             const query = document.getElementById('land-search').value.toLowerCase().trim();
             const tbody = document.getElementById('land-table-body');
@@ -412,8 +509,7 @@
                 return (typeof vA === 'string' ? vA.localeCompare(vB) : vA - vB) * sortDir;
             });
 
-            const limit = 200;
-            let html = filtered.slice(0, limit).map((l, i) => `
+            let html = filtered.slice(0, displayLimit).map((l, i) => `
                 <tr>
                     <td>${i + 1}</td><td>${l.planet}</td><td class="rarity-${l.rarity}"><strong>${l.rarity}</strong></td>
                     <td>${l.name}</td><td>${l.charge}</td><td class="val-mining">${l.mining}</td>
@@ -422,7 +518,14 @@
                 </tr>
             `).join('');
 
-            if(filtered.length > limit) html += `<tr><td colspan="13" class="empty-row">แสดง ${limit} จาก ${filtered.length.toLocaleString()} รายการ</td></tr>`;
+            if(filtered.length > displayLimit) {
+                html += `<tr><td colspan="13" class="empty-row" style="cursor:pointer; color:var(--neon-blue); text-decoration:underline;" onclick="showAll()">
+                    แสดง ${displayLimit} จาก ${filtered.length.toLocaleString()} รายการ (คลิกที่นี่เพื่อดูทั้งหมด)
+                </td></tr>`;
+            } else if (filtered.length > 0) {
+                html += `<tr><td colspan="13" class="empty-row">แสดงครบทั้งหมด ${filtered.length.toLocaleString()} รายการแล้ว</td></tr>`;
+            }
+            
             tbody.innerHTML = html || '<tr><td colspan="13" class="empty-row">ไม่พบข้อมูล...</td></tr>';
         }
 
