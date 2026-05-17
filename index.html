@@ -6,6 +6,7 @@
     <title>Alien Worlds | Serverless Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@300;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
             --bg-deep: #040510;
@@ -132,9 +133,20 @@
 
         .grid-container {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            grid-template-columns: repeat(3, 1fr);
             gap: 15px;
             margin-bottom: 30px;
+        }
+
+        @media (max-width: 1000px) {
+            .grid-container {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        @media (max-width: 600px) {
+            .grid-container {
+                grid-template-columns: 1fr;
+            }
         }
 
         .planet-card {
@@ -298,6 +310,15 @@
         const PLANETS = ["naron.world", "magor.world", "veles.world", "kavian.world", "neri.world", "eyeke.world"];
         const RARITIES = ["Abundant", "Common", "Rare", "Epic", "Legendary", "Mythic"];
         const RARITY_ORDER = {"Abundant":1, "Common":2, "Rare":3, "Epic":4, "Legendary":5, "Mythic":6};
+        const RARITY_COLORS = {
+            "Abundant": "#888888",
+            "Common": "#ffffff",
+            "Rare": "#00d2ff",
+            "Epic": "#bf55ec",
+            "Legendary": "#f1c40f",
+            "Mythic": "#e74c3c"
+        };
+        let chartInstances = {};
 
         let ALL_LANDS = [];
         let POOL_DATA = {};
@@ -307,6 +328,7 @@
         
         // ระบบบันทึกประวัติ (History Logic)
         let HISTORY = JSON.parse(localStorage.getItem('aw_mining_history_v2') || '[]');
+        let LIVE_HISTORY = []; // เก็บประวัติแบบเรียลไทม์ทุกวินาทีเพื่อวาดกราฟ
 
         function saveHistory() {
             if (Object.keys(POOL_DATA).length < 6) return;
@@ -393,6 +415,13 @@
                     }
                 }
                 document.getElementById('last-update-time').innerText = new Date().toLocaleTimeString();
+                
+                // อัปเดตข้อมูลรายวินาทีสำหรับวาดกราฟ
+                if (Object.keys(POOL_DATA).length > 0) {
+                    LIVE_HISTORY.push({ t: Date.now(), p: JSON.parse(JSON.stringify(POOL_DATA)) });
+                    if (LIVE_HISTORY.length > 120) LIVE_HISTORY.shift(); // แสดงผลย้อนหลัง 2 นาที (120 วิ)
+                }
+
                 renderPools();
                 saveHistory();
             } catch(e) { switchRpc(); }
@@ -454,19 +483,101 @@
             badge.innerText = `${ALL_LANDS.length.toLocaleString()} Lands Loaded`;
         }
 
-        function renderPools() {
+        function initPlanetGrid() {
             const grid = document.getElementById('planet-grid');
+            let html = '';
+            PLANETS.forEach(planet => {
+                const shortName = planet.split('.')[0].toUpperCase();
+                html += `
+                    <div class="planet-card" id="card-${planet.replace('.','-')}">
+                        <div class="planet-header">
+                            <div class="planet-name">${shortName}</div>
+                            <div class="crown-icon" style="display:none;"><i class="fas fa-crown" style="color: var(--neon-green);"></i></div>
+                        </div>
+                        <div class="chart-container" style="position: relative; height:140px; width:100%; margin-bottom: 15px;">
+                            <canvas id="chart-${planet.replace('.','-')}"></canvas>
+                        </div>
+                        <div class="bucket-list" id="buckets-${planet.replace('.','-')}"></div>
+                    </div>`;
+            });
+            grid.innerHTML = html;
+
+            PLANETS.forEach(planet => {
+                const ctx = document.getElementById(`chart-${planet.replace('.','-')}`).getContext('2d');
+                const datasets = RARITIES.map(r => ({
+                    label: r,
+                    data: [],
+                    borderColor: RARITY_COLORS[r],
+                    backgroundColor: RARITY_COLORS[r],
+                    borderWidth: 1.5,
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                    tension: 0.4,
+                    fill: false,
+                    yAxisID: r
+                }));
+
+                const scalesConfig = { x: { display: false } };
+                RARITIES.forEach(r => { scalesConfig[r] = { display: false }; });
+
+                chartInstances[planet] = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: datasets
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: { duration: 0 },
+                        interaction: {
+                            mode: 'index',
+                            intersect: false,
+                        },
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: { 
+                                enabled: true,
+                                mode: 'index',
+                                intersect: false,
+                                backgroundColor: 'rgba(0,0,0,0.8)',
+                                titleFont: { family: 'Orbitron', size: 11 },
+                                bodyFont: { family: 'Rajdhani', size: 11 },
+                                padding: 6,
+                                boxPadding: 3,
+                                displayColors: true
+                            }
+                        },
+                        scales: scalesConfig,
+                        layout: { padding: { top: 5, bottom: 5 } }
+                    }
+                });
+            });
+        }
+
+        function renderPools() {
+            if (Object.keys(chartInstances).length === 0) initPlanetGrid();
+
             let bestPlanet = ''; let maxVal = -1;
             PLANETS.forEach(p => { if (POOL_DATA[p] && POOL_DATA[p]["Common"] > maxVal) { maxVal = POOL_DATA[p]["Common"]; bestPlanet = p; } });
 
-            let html = '';
             PLANETS.forEach(planet => {
                 const isBest = planet === bestPlanet;
-                const shortName = planet.split('.')[0].toUpperCase();
+                const card = document.getElementById(`card-${planet.replace('.','-')}`);
+                const crown = card.querySelector('.crown-icon');
+                const bucketsContainer = document.getElementById(`buckets-${planet.replace('.','-')}`);
+                
+                if(isBest) {
+                    card.classList.add('best');
+                    crown.style.display = 'block';
+                } else {
+                    card.classList.remove('best');
+                    crown.style.display = 'none';
+                }
+
                 let bucketsHtml = '';
                 RARITIES.forEach(rarity => {
                     const val = (POOL_DATA[planet] && POOL_DATA[planet][rarity]) || 0;
-                    // เพิ่มคลาสตามชื่อ Rarity เช่น tlm-Rare, tlm-Legendary
                     const rarityClass = `tlm-${rarity}`;
                     const highYieldClass = val >= 5 ? 'high-yield' : '';
                     
@@ -476,9 +587,33 @@
                             <span class="tlm-value ${rarityClass} ${highYieldClass}">${val.toFixed(4)}</span>
                         </div>`;
                 });
-                html += `<div class="planet-card ${isBest ? 'best' : ''}"><div class="planet-header"><div class="planet-name">${shortName}</div>${isBest ? '<i class="fas fa-crown" style="color: var(--neon-green);"></i>' : ''}</div><div class="bucket-list">${bucketsHtml}</div></div>`;
+                bucketsContainer.innerHTML = bucketsHtml;
             });
-            grid.innerHTML = html;
+            
+            updateCharts();
+        }
+
+        function updateCharts() {
+            const chartData = [...LIVE_HISTORY];
+            if(chartData.length === 0) return;
+
+            const labels = chartData.map(h => {
+                const d = new Date(h.t);
+                return d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0') + ':' + String(d.getSeconds()).padStart(2, '0');
+            });
+
+            PLANETS.forEach(planet => {
+                const chart = chartInstances[planet];
+                if(!chart) return;
+                
+                chart.data.labels = labels;
+                
+                RARITIES.forEach((rarity, index) => {
+                    chart.data.datasets[index].data = chartData.map(h => (h.p[planet] && h.p[planet][rarity]) || 0);
+                });
+                
+                chart.update();
+            });
         }
 
         function setSort(key) {
